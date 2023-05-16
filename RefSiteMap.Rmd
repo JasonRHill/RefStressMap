@@ -1,0 +1,137 @@
+---
+title: "Reference Site Map (1994-2020)"
+author: "Jason Hill"
+date: "`r Sys.Date()`"
+output: html_document
+
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+```{r message = FALSE, warning = FALSE}
+library(readxl)
+library(tidyverse)
+library(tidyr)
+library(DT)
+library(sf)
+library(inlmisc)
+library(leaflet)
+
+# Set working directory
+
+setwd('C:/Users/ktq89598/Documents/JasonRefSiteMap')
+```
+
+
+# Overview
+
+This script was built using R 4.1.2 (Bird Hippie). 
+
+This tool allows users to see all the reference sites that have made it through reference screening filters and have been reviewed by regional biologists from collections sampled 1994 to 2020. This analysis reviewed 3,098 sites (12,118 samples) and found 591 reference sites.
+
+********
+# ProbMon Sites Table
+
+This tables shows all the reference sites sampled 1994 to 2020.
+
+```{r, warning=FALSE, allRef.1}
+# Load data
+RefSites <- read_excel('data/RefSiteSSourceGIS.xlsx', sheet='GIS')
+
+
+datatable(RefSites, rownames = F, escape= F, extensions = 'Buttons',
+                options = list(dom = 'Bift', scrollX= TRUE, scrollY = '300px',
+                               pageLength = nrow(RefSites), buttons=list('copy','colvis', 'excel')))
+
+#head(RefStressDataSelect)
+```
+
+# Map of Reference Sites (1994-2020)
+
+```{r, include=FALSE, message = FALSE, warning = FALSE}
+
+#ProbSites_sf <- mutate(ProbSites, FCODE2 = as.factor(case_when(FCODE > 0 ~ 'Fspatial'))) %>%
+#  st_as_sf(coords = c("LONDD_GRS", "LATDD_GRS"),  # make spatial layer using these columns
+#           remove = F, # dont remove these lat/lon cols from df
+#           crs = 4326) 
+###
+
+RefSites_sf <- RefSites %>%
+  st_as_sf(coords = c("Longitude", "Latitude"),  # make spatial layer using these columns
+           remove = F, # dont remove these lat/lon cols from df
+           crs = 4326) 
+
+Basin <- st_read('data/AssessmentRegions_VA84_basins.shp') %>%
+  st_transform(4326) # change to WGS84 for web mapping
+
+Basin2 <- st_read('data/deq_basins07.shp') %>%
+  st_transform(4326) # change to WGS84 for web mapping
+
+st_intersection(Basin2)
+
+
+BigSandy <- filter(Basin2, BASIN_CODE == '6A' ) 
+
+#TNsummary <- filter(stationSummary_sf, !is.na(medianTN)) 
+#TPsummary <- filter(stationSummary_sf, !is.na(medianTP))
+
+Ref_TT <- filter(RefSites_sf, Source == 'TetraTech VSCI Development' )
+Ref_PV <- filter(RefSites_sf, Source == 'ProbMon VSCI Validaton' )
+Ref_Genus <- filter(RefSites_sf, Source == 'Genus IBI Devlopment' )
+#ModerateStress2 <- filter(RefStressDataSelect_sf, StressAll == 'Moderate2 Stress' )
+#LowStress <- filter(RefStressDataSelect_sf, StressAll == 'zLow Stress' )
+#LowestStress <- filter(RefStressDataSelect_sf, StressAll == 'zLowest Stress' )
+#DOtest <- filter(RefStressDataSelect_sf, DOlevel == 'HIGHDO' )
+#mediumTN <- filter(stationSummary_sf,  TNlevel == 'Medium TN')
+#highTN <- filter(stationSummary_sf,  TNlevel == 'High TN')
+#lowTP <- filter(stationSummary_sf,  TPlevel == 'Low TP')
+#mediumTP <- filter(stationSummary_sf,  TPlevel == 'Medium TP')
+#highTP <- filter(stationSummary_sf,  TPlevel == 'High TP')
+```
+
+```{r, out.width = '100%'}
+#https://color-hex.org/color/3481eb to get color choices
+CreateWebMap(maps = c("Topo","Imagery","Hydrography"), collapsed = TRUE, 
+                   options= leafletOptions(zoomControl = TRUE,minZoom = 3, maxZoom = 20,
+                                           preferCanvas = TRUE)) %>%
+  setView(-79.1, 37.7, zoom=7)  %>% 
+  addCircleMarkers(data = Ref_TT,
+                   color='black', fillColor= '#2E74D3', fillOpacity = 0.5, stroke=0.1, radius = 4,
+                   weight = 2, group="TetraTech VSCI Development",
+                   label = ~StationID, layerId = ~StationID,
+                   popup = leafpop::popupTable(Ref_TT, zcol=c('StationID'))) %>%
+  addCircleMarkers(data = Ref_PV,
+                   color='black', fillColor= '#3aeb34', fillOpacity = 0.5, stroke=0.1, radius = 4,
+                   weight = 2, group="ProbMon VSCI Validaton",
+                   label = ~StationID, layerId = ~StationID,
+                   popup = leafpop::popupTable(Ref_PV, zcol=c('StationID'))) %>%
+  addCircleMarkers(data = Ref_Genus,
+                   color='black', fillColor= '#7a49a5', fillOpacity = 0.5, stroke=0.1, radius = 4,
+                   weight = 2, group="Genus IBI Devlopment",
+                   label = ~StationID, layerId = ~StationID,
+                   popup = leafpop::popupTable(Ref_Genus, zcol=c('StationID'))) %>%
+  
+  #addPolygons(data= BigSandy,  color = 'black', weight = 1,
+  #                fillColor='blue', fillOpacity = 0.1,stroke=0.1,
+  #                group="Big Sandy",
+  #                popup=leafpop::popupTable(BigSandy, zcol=c('SUBBASIN'))) %>%
+  
+  
+   addPolygons(data= Basin2,  color = 'black', weight = 1,
+                  fillColor='grey', fillOpacity = 0.3,stroke=0.1,
+                  group="Basins",
+                  popup=leafpop::popupTable(Basin2, zcol=c('BASIN_NAME','BASIN_CODE','SUBBASIN'))) %>%
+  
+  inlmisc::AddHomeButton(raster::extent(-83.89, -74.80, 36.54, 39.98), position = "topleft") %>%
+  addLayersControl(baseGroups=c("Topo","Imagery","Hydrography"),
+                   overlayGroups = c("TetraTech VSCI Development","ProbMon VSCI Validaton",
+                                     "Genus IBI Devlopment","Basins"),
+                   options=layersControlOptions(collapsed=T),
+                   position='topleft')
+```
+
+
+
